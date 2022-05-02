@@ -23,9 +23,44 @@ using System.Threading.Tasks;
             List<Wall> walls = CreateWalls(doc, listLevel, points);
             AddDoor(doc, listLevel, walls[0]);
             AddWindows(doc, listLevel, walls);
+            AddRoof(doc, listLevel, walls);
             return Result.Succeeded;
         }
+        private void AddRoof(Document doc, List<Level> listLevel, List<Wall> walls)
+        {
+            var level = listLevel
+                .Where(x => x.Name.Equals("Уровень 2"))
+                .FirstOrDefault();
+            RoofType roofType = new FilteredElementCollector(doc)
+                .OfClass(typeof(RoofType))
+                .OfType<RoofType>()
+                .Where(x => x.Name.Equals("Типовой - 400мм"))
+                .Where(x => x.FamilyName.Equals("Базовая крыша"))
+                .FirstOrDefault();
+            double wallWidth = walls[0].Width;
+            double df = wallWidth / 2;
+            double dh = level.get_Parameter(BuiltInParameter.LEVEL_ELEV).AsDouble();
+            XYZ dt = new XYZ(-df, -df, dh);
+            XYZ dz = new XYZ(0, 0, 20);
+            XYZ dy = new XYZ(0, 20, 0);
+            LocationCurve locationCurve = walls[0].Location as LocationCurve;
+            XYZ point = locationCurve.Curve.GetEndPoint(0);
+            double l = (walls[0].Location as LocationCurve).Curve.Length + df * 2;
+            double w = ((walls[1].Location as LocationCurve).Curve.Length / 2) + df;
+            XYZ origin = point + dt;
+            XYZ vy = XYZ.BasisY;
+            XYZ vz = XYZ.BasisZ;
+            CurveArray curve = new CurveArray();
+            curve.Append(Line.CreateBound(origin, origin + new XYZ(0, w, 5)));
+            curve.Append(Line.CreateBound(origin + new XYZ(0, w, 5), origin + new XYZ(0, w * 2, 0)));
+            var av = doc.ActiveView;
+            Transaction transaction = new Transaction(doc, "Создание крыши");
+            transaction.Start();
+            ReferencePlane plane = doc.Create.NewReferencePlane2(origin, origin - vz, origin + vy, av);
+            ExtrusionRoof extrusionRoof = doc.Create.NewExtrusionRoof(curve, plane, level, roofType, 0, l);
+            transaction.Commit();
 
+        }
         private void AddWindows(Document doc, List<Level> listLevel, List<Wall> walls)
         {
             var level = listLevel
@@ -56,7 +91,6 @@ using System.Threading.Tasks;
             }
             transaction.Commit();
         }
-
         public void AddDoor(Document doc, List<Level> listLevel, Wall wall)
         {
             var level = listLevel
